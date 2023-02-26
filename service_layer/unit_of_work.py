@@ -9,7 +9,7 @@ from adapters import repository
 
 
 class AbstractUnitOfWork(abc.ABC):
-    batches: repository.AbstractRepository
+    products: repository.AbstractProductRepository
 
     def __enter__(self):
         return self
@@ -29,8 +29,50 @@ class AbstractUnitOfWork(abc.ABC):
 DEFAULT_SESSION_FACTORY = sessionmaker(
     bind=create_engine(
         config.get_postgres_uri(),
+        isolation_level="SERIALIZABLE",
     )
 )
+
+
+class AutoRollbackUoW:
+    def __init__(self, uow: AbstractUnitOfWork):
+        self._uow = uow
+        self.products = self._uow.products
+
+    def __enter__(self):
+        return self._uow.__enter__()
+
+    def __exit__(self, *args):
+        self._uow.rollback()
+        return self._uow.__exit__(*args)
+
+    def __getattr__(self, name):
+        return getattr(self._uow, name)
+
+
+class EventPublishingUoW:
+    def __init__(self, uow: AutoRollbackUoW):
+        self._uow = uow
+        self.products = self._uow.products
+
+    def commit(self):
+        self._uow.commit()
+        self.publish_events()
+
+    def publish_events(self):
+        for product in self.products.seen:
+            while product.events:
+                event = product.events.pop(0)
+                # messagebus.handle(event)
+
+    def __enter__(self):
+        return self._uow.__enter__()
+
+    def __exit__(self, *args):
+        return self._uow.__exit__(*args)
+
+    def __getattr__(self, name):
+        return getattr(self._uow, name)
 
 
 class SqlAlchemyUnitOfWork(AbstractUnitOfWork):
@@ -39,7 +81,7 @@ class SqlAlchemyUnitOfWork(AbstractUnitOfWork):
 
     def __enter__(self):
         self.session: Session = self.session_factory()
-        self.batches = repository.SqlAlchemyRepository(self.session)
+        self.products = repository.SqlAlchemyRepository(self.session)
         return super().__enter__()
 
     def __exit__(self, exn_type, exn_value, traceback):
