@@ -1,19 +1,19 @@
 import abc
 
-from model import Batch
+from domain import model
 
 
 class AbstractRepository(abc.ABC):
     @abc.abstractmethod
-    def add(self, batch: Batch):
+    def add(self, batch: model.Batch):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get(self, reference) -> Batch:
+    def get(self, reference) -> model.Batch:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def list(self) -> list[Batch]:
+    def list(self) -> list[model.Batch]:
         raise NotImplementedError
 
 
@@ -25,10 +25,10 @@ class SqlAlchemyRepository(AbstractRepository):
         self.session.add(batch)
 
     def get(self, reference):
-        return self.session.query(Batch).filter_by(reference=reference).one()
+        return self.session.query(model.Batch).filter_by(reference=reference).one()
 
     def list(self):
-        return self.session.query(Batch).all()
+        return self.session.query(model.Batch).all()
 
 
 class FakeRepository(AbstractRepository):
